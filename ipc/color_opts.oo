@@ -1,0 +1,101 @@
+// # oocolor Command Line Options Parser
+//
+// Logline: Parses command-line color targets, conversion switches, and WCAG contrast arguments.
+//
+// Setup: Decodes flags for specific space formatting, palette generation, and terminal previews.
+//
+// Beats:
+//   1. Declare ColorCliOpts structure encapsulating color queries and switches.
+//   2. Parse flags for HEX, RGB, HSL, CMYK, and ANSI 256 output.
+//   3. Handle contrast comparison and palette generation arguments.
+//   4. Supply initialized default option records.
+
+pub type ColorCliOpts = struct {
+    color_arg: String,
+    contrast_with: String,
+    out_hex: Bool,
+    out_rgb: Bool,
+    out_hsl: Bool,
+    out_cmyk: Bool,
+    out_ansi: Bool,
+    preview: Bool,
+    palette_mode: String,
+    demo: Bool,
+    json: Bool,
+    mcp: Bool,
+    help: Bool,
+    version: Bool
+};
+
+pub fn make_default_cli_opts() -> ColorCliOpts {
+    return ColorCliOpts {
+        color_arg: "",
+        contrast_with: "",
+        out_hex: false,
+        out_rgb: false,
+        out_hsl: false,
+        out_cmyk: false,
+        out_ansi: false,
+        preview: false,
+        palette_mode: "",
+        demo: false,
+        json: false,
+        mcp: false,
+        help: false,
+        version: false
+    };
+}
+
+pub fn parse_cli_args(args: List[String]) -> ColorCliOpts {
+    let mut opts: ColorCliOpts = make_default_cli_opts();
+    let num_args: Int = list_len(args);
+    let mut i: Int = 0;
+
+    while i < num_args {
+        let arg: String = list_get(args, i);
+
+        if arg == "-h" || arg == "--help" {
+            opts.help = true;
+        } else if arg == "-V" || arg == "-v" || arg == "--version" {
+            opts.version = true;
+        } else if arg == "--mcp" {
+            opts.mcp = true;
+        } else if arg == "--demo" {
+            opts.demo = true;
+        } else if arg == "--json" {
+            opts.json = true;
+        } else if arg == "-x" || arg == "--hex" {
+            opts.out_hex = true;
+        } else if arg == "-r" || arg == "--rgb" {
+            opts.out_rgb = true;
+        } else if arg == "-s" || arg == "--hsl" {
+            opts.out_hsl = true;
+        } else if arg == "-c" || arg == "--cmyk" {
+            opts.out_cmyk = true;
+        } else if arg == "-a" || arg == "--ansi" || arg == "--ansi256" {
+            opts.out_ansi = true;
+        } else if arg == "-p" || arg == "--preview" {
+            opts.preview = true;
+        } else if arg == "--contrast" {
+            if i + 1 < num_args {
+                i = i + 1;
+                opts.contrast_with = list_get(args, i);
+            }
+        } else if arg == "--palette" {
+            if i + 1 < num_args {
+                i = i + 1;
+                opts.palette_mode = list_get(args, i);
+            }
+        } else if !str_starts_with(arg, "-") {
+            if chars_len(opts.color_arg) == 0 {
+                opts.color_arg = arg;
+            } else if chars_len(opts.contrast_with) == 0 {
+                opts.contrast_with = arg;
+            }
+        }
+
+        i = i + 1;
+    }
+
+    return opts;
+}

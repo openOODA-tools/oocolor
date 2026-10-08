@@ -1,0 +1,72 @@
+// # oocolor Demonstration Palettes and Fixtures
+//
+// Logline: Synthetic color fixtures and palette generators for validation and demo modes.
+//
+// Setup: Prepares representative colors, contrast pairs, and harmonies for verification.
+//
+// Beats:
+//   1. Build primary and accent demo color records.
+//   2. Build standard WCAG contrast test pairs (black on white).
+//   3. Generate tints and shades palette sequences.
+//   4. Validate palette harmony generation.
+
+import "core/color_types.oo";
+import "core/color_convert.oo";
+
+pub fn build_demo_red() -> ColorRecord {
+    return build_color_from_rgb(255, 0, 0, "red");
+}
+
+pub fn build_demo_green() -> ColorRecord {
+    return build_color_from_rgb(0, 128, 0, "green");
+}
+
+pub fn build_demo_blue() -> ColorRecord {
+    return build_color_from_rgb(0, 0, 255, "blue");
+}
+
+pub fn build_demo_white() -> ColorRecord {
+    return build_color_from_rgb(255, 255, 255, "white");
+}
+
+pub fn build_demo_black() -> ColorRecord {
+    return build_color_from_rgb(0, 0, 0, "black");
+}
+
+pub fn build_demo_palette() -> List[ColorRecord] {
+    let mut list: List[ColorRecord] = list_new();
+    list = list_push(list, build_demo_red());
+    list = list_push(list, build_demo_green());
+    list = list_push(list, build_demo_blue());
+    list = list_push(list, build_demo_white());
+    list = list_push(list, build_demo_black());
+    return list;
+}
+
+pub fn generate_tints(base: ColorRecord, steps: Int) -> List[ColorRecord] {
+    let mut list: List[ColorRecord] = list_new();
+    let white: ColorRecord = build_demo_white();
+    let num_steps: Int = if steps < 2 { 2 } else if steps > 10 { 10 } else { steps };
+    let mut i: Int = 0;
+    while i < num_steps {
+        let pct: Int = (i * 100) / (num_steps - 1);
+        let tinted: ColorRecord = blend_colors(base, white, pct);
+        list = list_push(list, tinted);
+        i = i + 1;
+    }
+    return list;
+}
+
+pub fn generate_shades(base: ColorRecord, steps: Int) -> List[ColorRecord] {
+    let mut list: List[ColorRecord] = list_new();
+    let black: ColorRecord = build_demo_black();
+    let num_steps: Int = if steps < 2 { 2 } else if steps > 10 { 10 } else { steps };
+    let mut i: Int = 0;
+    while i < num_steps {
+        let pct: Int = (i * 100) / (num_steps - 1);
+        let shaded: ColorRecord = blend_colors(base, black, pct);
+        list = list_push(list, shaded);
+        i = i + 1;
+    }
+    return list;
+}

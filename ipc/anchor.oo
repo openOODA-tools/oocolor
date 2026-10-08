@@ -1,0 +1,71 @@
+// # oocolor IPC Subsystem Verification Anchor
+//
+// Logline: Certifies JSON-RPC 2.0 stdio handling, CLI argument parsing, and tool dispatch.
+//
+// Setup: Validates protocol converters against deterministic JSON strings and CLI arguments.
+//
+// Beats:
+//   1. Assert JSON string escaping and unescaping fidelity.
+//   2. Assert JSON key/value extraction for strings and integers.
+//   3. Assert CLI option parsing across single and multi-flag invocations.
+//   4. Assert MCP protocol handshakes and tool dispatch execution.
+
+import "core/color_types.oo";
+import "core/color_convert.oo";
+import "core/color_demo.oo";
+import "ipc/json_field.oo";
+import "ipc/color_opts.oo";
+import "ipc/mcp_serve.oo";
+
+pub fn verify_ipc_subsystem(fs: &FsReadCap) -> Bool {
+    let esc: String = json_escape("test\"quotes\" and \\slashes\\");
+    if !str_contains(esc, "\\\"") || !str_contains(esc, "\\\\") {
+        return false;
+    }
+
+    let unesc: String = json_unescape("hello\\nworld");
+    if !str_contains(unesc, "\n") {
+        return false;
+    }
+
+    let sample_json: String = "{\"tool\":\"color_convert\",\"color\":\"#FF0000\",\"steps\":5}";
+    let tool_val: String = extract_json_str(sample_json, "tool");
+    if tool_val != "color_convert" {
+        return false;
+    }
+    let steps_val: Int = extract_json_int(sample_json, "steps", 1);
+    if steps_val != 5 {
+        return false;
+    }
+
+    let mut cli_args: List[String] = list_new();
+    cli_args = list_push(cli_args, "#3498DB");
+    cli_args = list_push(cli_args, "--contrast");
+    cli_args = list_push(cli_args, "#FFFFFF");
+    cli_args = list_push(cli_args, "--preview");
+
+    let opts: ColorCliOpts = parse_cli_args(cli_args);
+    if opts.color_arg != "#3498DB" || opts.contrast_with != "#FFFFFF" || !opts.preview {
+        return false;
+    }
+
+    let init_req: String = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"initialize\"}";
+    let init_resp: String = handle_mcp_message(init_req);
+    if !str_contains(init_resp, "\"protocolVersion\":\"2024-11-05\"") || !str_contains(init_resp, "oocolor") {
+        return false;
+    }
+
+    let list_req: String = "{\"jsonrpc\":\"2.0\",\"id\":\"2\",\"method\":\"tools/list\"}";
+    let list_resp: String = handle_mcp_message(list_req);
+    if !str_contains(list_resp, "color_convert") || !str_contains(list_resp, "color_contrast") {
+        return false;
+    }
+
+    let call_req: String = "{\"jsonrpc\":\"2.0\",\"id\":\"3\",\"method\":\"tools/call\",\"name\":\"color_convert\",\"color\":\"#00FF00\"}";
+    let call_resp: String = handle_mcp_message(call_req);
+    if !str_contains(call_resp, "\"hex\":\"#00FF00\"") {
+        return false;
+    }
+
+    return true;
+}

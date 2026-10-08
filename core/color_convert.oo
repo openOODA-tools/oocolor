@@ -1,0 +1,232 @@
+// # oocolor Color Conversion and Spaces Engine
+//
+// Logline: Multi-space mathematical conversions for HEX, RGB, HSL, CMYK, ANSI 256, and WCAG contrast.
+//
+// Setup: Pure numerical algorithms operating with integer scaling to eliminate float rounding errors.
+//
+// Beats:
+//   1. Convert numeric byte values into two-character uppercase hex strings.
+//   2. Parse hex strings and named color definitions into RGB triples.
+//   3. Compute bidirectional mappings between RGB, HSL, CMYK, and ANSI 256.
+//   4. Calculate WCAG 2.1 relative luminance and contrast compliance ratios.
+
+import "core/color_types.oo";
+
+fn hex_nibble(n: Int) -> String {
+    let v: Int = n % 16;
+    if v < 10 { return to_string(v); }
+    if v == 10 { return "A"; }
+    if v == 11 { return "B"; }
+    if v == 12 { return "C"; }
+    if v == 13 { return "D"; }
+    if v == 14 { return "E"; }
+    return "F";
+}
+
+pub fn int_to_hex2(val: Int) -> String {
+    let clamped: Int = if val < 0 { 0 } else if val > 255 { 255 } else { val };
+    return hex_nibble(clamped / 16) + hex_nibble(clamped % 16);
+}
+
+pub fn rgb_to_hex(r: Int, g: Int, b: Int) -> String {
+    return "#" + int_to_hex2(r) + int_to_hex2(g) + int_to_hex2(b);
+}
+
+fn parse_hex_char(b: Int) -> Int {
+    if b >= 48 && b <= 57 { return b - 48; }
+    if b >= 65 && b <= 70 { return b - 65 + 10; }
+    if b >= 97 && b <= 102 { return b - 97 + 10; }
+    return 0;
+}
+
+fn to_lower_ascii(s: String) -> String {
+    let mut out: String = "";
+    let n: Int = chars_len(s);
+    let mut i: Int = 0;
+    while i < n {
+        let b: Int = byte_at(s, i);
+        if b >= 65 && b <= 90 {
+            out = out + bytes_to_str(bytes_push(bytes_new(), b + 32));
+        } else {
+            out = out + str_slice(s, i, i + 1);
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn parse_named_color(name: String) -> String {
+    let lower: String = to_lower_ascii(str_trim(name));
+    if lower == "black" { return "#000000"; }
+    if lower == "white" { return "#FFFFFF"; }
+    if lower == "red" { return "#FF0000"; }
+    if lower == "green" { return "#008000"; }
+    if lower == "blue" { return "#0000FF"; }
+    if lower == "yellow" { return "#FFFF00"; }
+    if lower == "cyan" { return "#00FFFF"; }
+    if lower == "magenta" { return "#FF00FF"; }
+    if lower == "gray" || lower == "grey" { return "#808080"; }
+    if lower == "orange" { return "#FFA500"; }
+    if lower == "purple" { return "#800080"; }
+    if lower == "navy" { return "#000080"; }
+    if lower == "teal" { return "#008080"; }
+    if lower == "maroon" { return "#800000"; }
+    if lower == "silver" { return "#C0C0C0"; }
+    if lower == "gold" { return "#FFD700"; }
+    if lower == "lime" { return "#00FF00"; }
+    if lower == "coral" { return "#FF7F50"; }
+    if lower == "pink" { return "#FFC0CB"; }
+    return "";
+}
+
+pub fn rgb_to_hsl(r: Int, g: Int, b: Int) -> HslColor {
+    let mut max_val: Int = r;
+    if g > max_val { max_val = g; }
+    if b > max_val { max_val = b; }
+
+    let mut min_val: Int = r;
+    if g < min_val { min_val = g; }
+    if b < min_val { min_val = b; }
+
+    let delta: Int = max_val - min_val;
+    let l_pct: Int = ((max_val + min_val) * 100) / 510;
+
+    if delta == 0 {
+        return make_hsl(0, 0, l_pct);
+    }
+
+    let s_pct: Int = if l_pct < 50 {
+        (delta * 100) / (max_val + min_val)
+    } else {
+        (delta * 100) / (510 - (max_val + min_val))
+    };
+
+    let mut h_deg: Int = 0;
+    if max_val == r {
+        h_deg = (60 * (g - b)) / delta;
+        if h_deg < 0 { h_deg = h_deg + 360; }
+    } else if max_val == g {
+        h_deg = 120 + (60 * (b - r)) / delta;
+    } else {
+        h_deg = 240 + (60 * (r - g)) / delta;
+    }
+    if h_deg < 0 { h_deg = h_deg + 360; }
+    h_deg = h_deg % 360;
+
+    return make_hsl(h_deg, s_pct, l_pct);
+}
+
+pub fn rgb_to_cmyk(r: Int, g: Int, b: Int) -> CmykColor {
+    let mut max_val: Int = r;
+    if g > max_val { max_val = g; }
+    if b > max_val { max_val = b; }
+
+    let k: Int = 100 - ((max_val * 100) / 255);
+    if k >= 100 {
+        return make_cmyk(0, 0, 0, 100);
+    }
+
+    let denom: Int = 255 - ((k * 255) / 100);
+    if denom == 0 {
+        return make_cmyk(0, 0, 0, 100);
+    }
+
+    let c: Int = ((255 - r - ((k * 255) / 100)) * 100) / denom;
+    let m: Int = ((255 - g - ((k * 255) / 100)) * 100) / denom;
+    let y: Int = ((255 - b - ((k * 255) / 100)) * 100) / denom;
+
+    let c_clamped: Int = if c < 0 { 0 } else if c > 100 { 100 } else { c };
+    let m_clamped: Int = if m < 0 { 0 } else if m > 100 { 100 } else { m };
+    let y_clamped: Int = if y < 0 { 0 } else if y > 100 { 100 } else { y };
+
+    return make_cmyk(c_clamped, m_clamped, y_clamped, k);
+}
+
+pub fn rgb_to_ansi256(r: Int, g: Int, b: Int) -> Int {
+    if r == g && g == b {
+        if r < 8 { return 16; }
+        if r > 248 { return 231; }
+        return 232 + (((r - 8) * 24) / 240);
+    }
+    let r6: Int = (r * 5) / 255;
+    let g6: Int = (g * 5) / 255;
+    let b6: Int = (b * 5) / 255;
+    return 16 + (36 * r6) + (6 * g6) + b6;
+}
+
+pub fn build_color_from_rgb(r: Int, g: Int, b: Int, name_hint: String) -> ColorRecord {
+    let clamped_r: Int = if r < 0 { 0 } else if r > 255 { 255 } else { r };
+    let clamped_g: Int = if g < 0 { 0 } else if g > 255 { 255 } else { g };
+    let clamped_b: Int = if b < 0 { 0 } else if b > 255 { 255 } else { b };
+
+    let hex: String = rgb_to_hex(clamped_r, clamped_g, clamped_b);
+    let rgb: RgbColor = make_rgb(clamped_r, clamped_g, clamped_b);
+    let hsl: HslColor = rgb_to_hsl(clamped_r, clamped_g, clamped_b);
+    let cmyk: CmykColor = rgb_to_cmyk(clamped_r, clamped_g, clamped_b);
+    let ansi: Int = rgb_to_ansi256(clamped_r, clamped_g, clamped_b);
+    return make_color_record(hex, rgb, hsl, cmyk, ansi, name_hint);
+}
+
+pub fn parse_color_string(raw: String) -> Result[ColorRecord, String] {
+    let mut s: String = str_trim(raw);
+    if chars_len(s) == 0 {
+        return Err("oocolor: empty color specification");
+    }
+
+    let named: String = parse_named_color(s);
+    if chars_len(named) > 0 {
+        s = named;
+    }
+
+    if str_starts_with(s, "#") {
+        s = str_slice(s, 1, chars_len(s));
+    }
+
+    let n: Int = chars_len(s);
+    if n == 6 {
+        let r: Int = parse_hex_char(byte_at(s, 0)) * 16 + parse_hex_char(byte_at(s, 1));
+        let g: Int = parse_hex_char(byte_at(s, 2)) * 16 + parse_hex_char(byte_at(s, 3));
+        let b: Int = parse_hex_char(byte_at(s, 4)) * 16 + parse_hex_char(byte_at(s, 5));
+        return Ok(build_color_from_rgb(r, g, b, raw));
+    }
+
+    if n == 3 {
+        let r: Int = parse_hex_char(byte_at(s, 0)) * 17;
+        let g: Int = parse_hex_char(byte_at(s, 1)) * 17;
+        let b: Int = parse_hex_char(byte_at(s, 2)) * 17;
+        return Ok(build_color_from_rgb(r, g, b, raw));
+    }
+
+    return Err("oocolor: unrecognized color format '" + raw + "'");
+}
+
+pub fn calculate_contrast(c1: ColorRecord, c2: ColorRecord) -> ContrastResult {
+    let lum1: Int = (2126 * c1.rgb.r) + (7152 * c1.rgb.g) + (722 * c1.rgb.b);
+    let lum2: Int = (2126 * c2.rgb.r) + (7152 * c2.rgb.g) + (722 * c2.rgb.b);
+
+    let max_lum: Int = if lum1 > lum2 { lum1 } else { lum2 };
+    let min_lum: Int = if lum1 > lum2 { lum2 } else { lum1 };
+
+    let ratio_x100: Int = ((max_lum + 127500) * 100) / (min_lum + 127500);
+
+    let whole: Int = ratio_x100 / 100;
+    let frac: Int = ratio_x100 % 100;
+    let frac_s: String = if frac < 10 { "0" + to_string(frac) } else { to_string(frac) };
+    let ratio_str: String = to_string(whole) + "." + frac_s + ":1";
+
+    let aa_norm: Bool = ratio_x100 >= 450;
+    let aa_lg: Bool = ratio_x100 >= 300;
+    let aaa_norm: Bool = ratio_x100 >= 700;
+    let aaa_lg: Bool = ratio_x100 >= 450;
+
+    return make_contrast_result(c1.hex, c2.hex, ratio_x100, ratio_str, aa_norm, aa_lg, aaa_norm, aaa_lg);
+}
+
+pub fn blend_colors(c1: ColorRecord, c2: ColorRecord, pct: Int) -> ColorRecord {
+    let p: Int = if pct < 0 { 0 } else if pct > 100 { 100 } else { pct };
+    let q: Int = 100 - p;
+    let r: Int = ((c1.rgb.r * q) + (c2.rgb.r * p)) / 100;
+    let g: Int = ((c1.rgb.g * q) + (c2.rgb.g * p)) / 100;
+    let b: Int = ((c1.rgb.b * q) + (c2.rgb.b * p)) / 100;
+    return build_color_from_rgb(r, g, b, "blend");
+}

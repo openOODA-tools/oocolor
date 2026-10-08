@@ -1,0 +1,67 @@
+// # oocolor Formatting and Swatch Render Subsystem
+//
+// Logline: Formats terminal TrueColor swatches, cross-space color cards, contrast reports, and JSON telemetry.
+//
+// Setup: Generates ANSI escape sequences and formatted diagnostic cards for CLI and MCP surfaces.
+//
+// Beats:
+//   1. Build TrueColor 24-bit terminal swatch escape sequences.
+//   2. Render formatted color card table displaying all color representations.
+//   3. Render WCAG 2.1 contrast compliance cards with AA/AAA ratings.
+//   4. Generate structured JSON telemetry.
+
+import "core/color_types.oo";
+
+pub fn render_swatch(c: ColorRecord) -> String {
+    let esc: String = bytes_to_str(bytes_push(bytes_new(), 27));
+    return esc + "[48;2;" + to_string(c.rgb.r) + ";" + to_string(c.rgb.g) + ";" + to_string(c.rgb.b) + "m    " + esc + "[0m";
+}
+
+pub fn render_color_card(c: ColorRecord) -> String {
+    let mut out: String = "";
+    out = out + "Color: " + render_swatch(c) + "  " + c.hex + "\n";
+    out = out + "  RGB:      rgb(" + to_string(c.rgb.r) + ", " + to_string(c.rgb.g) + ", " + to_string(c.rgb.b) + ")\n";
+    out = out + "  HSL:      hsl(" + to_string(c.hsl.h) + ", " + to_string(c.hsl.s) + "%, " + to_string(c.hsl.l) + "%)\n";
+    out = out + "  CMYK:     cmyk(" + to_string(c.cmyk.c) + "%, " + to_string(c.cmyk.m) + "%, " + to_string(c.cmyk.y) + "%, " + to_string(c.cmyk.k) + "%)\n";
+    out = out + "  ANSI 256: " + to_string(c.ansi256) + "\n";
+    return out;
+}
+
+pub fn render_contrast_card(res: ContrastResult) -> String {
+    let mut out: String = "========================================================\n";
+    out = out + "          WCAG 2.1 Contrast Ratio Report                \n";
+    out = out + "========================================================\n";
+    out = out + "Foreground:  " + res.fg_hex + "\n";
+    out = out + "Background:  " + res.bg_hex + "\n";
+    out = out + "Ratio:       " + res.ratio_str + "\n";
+    out = out + "--------------------------------------------------------\n";
+    out = out + "Level AA Normal Text (>= 4.5:1):  " + (if res.aa_normal { "PASS" } else { "FAIL" }) + "\n";
+    out = out + "Level AA Large Text  (>= 3.0:1):  " + (if res.aa_large { "PASS" } else { "FAIL" }) + "\n";
+    out = out + "Level AAA Normal Text(>= 7.0:1):  " + (if res.aaa_normal { "PASS" } else { "FAIL" }) + "\n";
+    out = out + "Level AAA Large Text (>= 4.5:1):  " + (if res.aaa_large { "PASS" } else { "FAIL" }) + "\n";
+    out = out + "========================================================\n";
+    return out;
+}
+
+pub fn render_json_telemetry(c: ColorRecord) -> String {
+    let mut j: String = "{\"tool\":\"oocolor\",\"version\":\"0.2.0\",";
+    j = j + "\"hex\":\"" + c.hex + "\",";
+    j = j + "\"rgb\":{\"r\":" + to_string(c.rgb.r) + ",\"g\":" + to_string(c.rgb.g) + ",\"b\":" + to_string(c.rgb.b) + "},";
+    j = j + "\"hsl\":{\"h\":" + to_string(c.hsl.h) + ",\"s\":" + to_string(c.hsl.s) + ",\"l\":" + to_string(c.hsl.l) + "},";
+    j = j + "\"cmyk\":{\"c\":" + to_string(c.cmyk.c) + ",\"m\":" + to_string(c.cmyk.m) + ",\"y\":" + to_string(c.cmyk.y) + ",\"k\":" + to_string(c.cmyk.k) + "},";
+    j = j + "\"ansi256\":" + to_string(c.ansi256) + "}\n";
+    return j;
+}
+
+pub fn render_contrast_json(res: ContrastResult) -> String {
+    let mut j: String = "{\"tool\":\"oocolor\",\"version\":\"0.2.0\",";
+    j = j + "\"fg\":\"" + res.fg_hex + "\",";
+    j = j + "\"bg\":\"" + res.bg_hex + "\",";
+    j = j + "\"ratio\":\"" + res.ratio_str + "\",";
+    j = j + "\"ratio_x100\":" + to_string(res.ratio_x100) + ",";
+    j = j + "\"aa_normal\":" + (if res.aa_normal { "true" } else { "false" }) + ",";
+    j = j + "\"aa_large\":" + (if res.aa_large { "true" } else { "false" }) + ",";
+    j = j + "\"aaa_normal\":" + (if res.aaa_normal { "true" } else { "false" }) + ",";
+    j = j + "\"aaa_large\":" + (if res.aaa_large { "true" } else { "false" }) + "}\n";
+    return j;
+}

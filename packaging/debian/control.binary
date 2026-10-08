@@ -1,0 +1,11 @@
+Package: oocolor
+Version: 0.2.0-1
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: openOODA-tools <ops@openooda.org>
+Depends: libc6
+Description: COLOR CONVERTER
+ Converts between HEX, RGB, HSL, CMYK, and ANSI 256 color representations.
+ Capability-bounded openOODA utility with zero ambient authority,
+ WCAG contrast audits, and native Model Context Protocol (MCP) surface.

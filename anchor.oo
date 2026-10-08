@@ -1,13 +1,31 @@
-// # oocolor Root Anchor
+// # oocolor Root Subsystem Anchor
 //
-// Logline: Top-level anchor re-exporting options, core logic, render, and ipc subsystems.
+// Logline: Unified verification anchor certifying core math, terminal rendering, and IPC subsystems.
 //
-// Setup: Pure shim re-exporting all oocolor subsystem anchors.
+// Setup: Executes complete subsystem assertions across chromatic, rendering, and protocol domains.
 //
 // Beats:
-//   1. Re-export options parsing subsystem.
-//   2. Re-export core oocolor execution engine.
-//   3. Re-export render formatting subsystem.
-//   4. Re-export Model Context Protocol (MCP) IPC subsystem.
+//   1. Re-export and verify core chromatic math subsystem.
+//   2. Re-export and verify terminal TrueColor rendering subsystem.
+//   3. Re-export and verify JSON-RPC stdio IPC protocol subsystem.
+//   4. Supply top-level verification suite predicate.
 
-import "main.oo";
+import "core/anchor.oo";
+import "render/anchor.oo";
+import "ipc/anchor.oo";
+
+pub fn verify_all_subsystems(fs: &FsReadCap) -> Bool {
+    if !verify_core_subsystem() {
+        return false;
+    }
+
+    if !verify_render_subsystem() {
+        return false;
+    }
+
+    if !verify_ipc_subsystem(fs) {
+        return false;
+    }
+
+    return true;
+}

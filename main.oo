@@ -1,52 +1,194 @@
 // # oocolor Main Entry Point
 //
-// Logline: Converts between HEX, RGB, HSL, CMYK, and ANSI 256 color representations.
+// Logline: Sovereign color converter, TrueColor terminal previewer, and WCAG contrast auditor.
 //
 // Setup: Demands explicit capability tokens and standard argument list.
 //
 // Beats:
 //   1. Parse command-line options and dispatch --help, --version, or --mcp.
-//   2. Execute capability-bounded oocolor operations.
-//   3. Format and output structured results to standard output.
+//   2. Handle --demo, --contrast, and --palette generation workflows.
+//   3. Parse color representations into canonical chromatic models.
+//   4. Deliver TrueColor swatches, space conversions, and JSON telemetry.
 
-fn render_help() -> String {
-    return "oocolor 0.1.0 (openOODA sovereign theme & styling)\n"
-        + "usage: oocolor [options] [ARGUMENTS]...\n\n"
+import "core/color_types.oo";
+import "core/color_convert.oo";
+import "core/color_demo.oo";
+import "render/color_theme.oo";
+import "ipc/color_opts.oo";
+import "ipc/mcp_serve.oo";
+import "anchor.oo";
+
+pub fn render_help() -> String {
+    return "oocolor 0.2.0 (openOODA sovereign theme & styling)\n"
+        + "usage: oocolor [options] [COLOR] [CONTRAST_COLOR]\n\n"
         + "Converts between HEX, RGB, HSL, CMYK, and ANSI 256 color representations.\n\n"
         + "Options:\n"
-        + "  -h, --help           display this help and exit\n"
-        + "  -v, --version        output version information and exit\n"
-        + "      --json           output formatted as JSON Lines\n"
-        + "      --color <WHEN>   colorize output: auto, always, never [default: auto]\n"
-        + "      --theme <NAME>   override active oote palette\n"
-        + "      --mcp            run as Model Context Protocol stdio server\n";
+        + "  -x, --hex              output HEX color value (#RRGGBB)\n"
+        + "  -r, --rgb              output RGB representation rgb(R, G, B)\n"
+        + "  -s, --hsl              output HSL representation hsl(H, S%, L%)\n"
+        + "  -c, --cmyk             output CMYK representation cmyk(C%, M%, Y%, K%)\n"
+        + "  -a, --ansi             output ANSI 256 index\n"
+        + "  -p, --preview          render TrueColor terminal swatch\n"
+        + "      --contrast COLOR   calculate WCAG 2.1 contrast ratio against color\n"
+        + "      --palette MODE     generate palette (tints, shades) [default: tints]\n"
+        + "      --demo             showcase chromatic models and WCAG matrix\n"
+        + "      --json             output formatted as JSON Lines\n"
+        + "  -h, --help             display this help and exit\n"
+        + "  -v, -V, --version      output version information and exit\n"
+        + "      --mcp              run as Model Context Protocol stdio server\n";
 }
 
-fn render_version() -> String {
-    return "oocolor 0.1.0 (openOODA sovereign theme & styling)\n";
+pub fn render_version() -> String {
+    return "oocolor 0.2.0 (openOODA sovereign theme & styling)\n";
 }
 
-fn main(args: List[String]) -> Int {
-    let num_args: Int = list_len(args);
-    let mut i: Int = 0;
+fn run_demo(json: Bool) {
+    let red: ColorRecord = build_demo_red();
+    let green: ColorRecord = build_demo_green();
+    let blue: ColorRecord = build_demo_blue();
+    let white: ColorRecord = build_demo_white();
+    let black: ColorRecord = build_demo_black();
 
-    while i < num_args {
-        let arg: String = list_get(args, i);
-        if arg == "-h" || arg == "--help" {
-            print(render_help());
-            return 0;
-        }
-        if arg == "-v" || arg == "--version" {
-            print(render_version());
-            return 0;
-        }
-        if arg == "--mcp" {
-            print("{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"ready\",\"tool\":\"oocolor\"}}\n");
-            return 0;
-        }
-        i = i + 1;
+    if json {
+        print(render_json_telemetry(red));
+        print(render_json_telemetry(green));
+        print(render_json_telemetry(blue));
+        let contrast: ContrastResult = calculate_contrast(white, black);
+        print(render_contrast_json(contrast));
+        return;
     }
 
-    print("oocolor: sovereign capability-bounded utility ready\n");
-    return 0;
+    print("oocolor Sovereign Chromatic Demonstration:\n\n");
+    print(render_color_card(red));
+    print("\n");
+    print(render_color_card(green));
+    print("\n");
+    print(render_color_card(blue));
+    print("\n");
+
+    let contrast: ContrastResult = calculate_contrast(white, black);
+    print(render_contrast_card(contrast));
+}
+
+pub fn main(
+    fs: &FsReadCap,
+    _proc_cap: &ProcessCap,
+    _env: &EnvCap,
+    args: List[String]
+) -> Result[Int, String] {
+    let opts: ColorCliOpts = parse_cli_args(args);
+
+    if opts.help {
+        print(render_help());
+        process_exit(0);
+        return Ok(0);
+    }
+    if opts.version {
+        print(render_version());
+        process_exit(0);
+        return Ok(0);
+    }
+    if opts.mcp {
+        run_mcp_server(fs);
+        process_exit(0);
+        return Ok(0);
+    }
+    if opts.demo {
+        run_demo(opts.json);
+        process_exit(0);
+        return Ok(0);
+    }
+
+    if chars_len(opts.color_arg) == 0 {
+        print(render_help());
+        process_exit(0);
+        return Ok(0);
+    }
+
+    let parsed_res: Result[ColorRecord, String] = parse_color_string(opts.color_arg);
+    if !parsed_res.is_ok() {
+        let err_msg: String = match parsed_res { Ok(_) => "", Err(e) => e };
+        print("oocolor: error: " + err_msg + "\n");
+        process_exit(1);
+        return Ok(1);
+    }
+    let color: ColorRecord = match parsed_res { Ok(c) => c, Err(_) => build_demo_red() };
+
+    // Handle contrast comparison
+    if chars_len(opts.contrast_with) > 0 {
+        let c2_res: Result[ColorRecord, String] = parse_color_string(opts.contrast_with);
+        if !c2_res.is_ok() {
+            let err_msg: String = match c2_res { Ok(_) => "", Err(e) => e };
+            print("oocolor: contrast target error: " + err_msg + "\n");
+            process_exit(1);
+            return Ok(1);
+        }
+        let c2: ColorRecord = match c2_res { Ok(c) => c, Err(_) => build_demo_black() };
+        let contrast: ContrastResult = calculate_contrast(color, c2);
+        if opts.json {
+            print(render_contrast_json(contrast));
+        } else {
+            print(render_contrast_card(contrast));
+        }
+        process_exit(0);
+        return Ok(0);
+    }
+
+    // Handle palette generation
+    if chars_len(opts.palette_mode) > 0 {
+        let list: List[ColorRecord] = if opts.palette_mode == "shades" {
+            generate_shades(color, 5)
+        } else {
+            generate_tints(color, 5)
+        };
+        let n: Int = list_len(list);
+        let mut i: Int = 0;
+        while i < n {
+            let item: ColorRecord = list_get(list, i);
+            if opts.preview {
+                print(render_swatch(item) + "  " + item.hex + "  rgb(" + to_string(item.rgb.r) + "," + to_string(item.rgb.g) + "," + to_string(item.rgb.b) + ")\n");
+            } else {
+                print(item.hex + "\n");
+            }
+            i = i + 1;
+        }
+        process_exit(0);
+        return Ok(0);
+    }
+
+    // Handle single format requests
+    let has_specific_out: Bool = opts.out_hex || opts.out_rgb || opts.out_hsl || opts.out_cmyk || opts.out_ansi || opts.preview;
+
+    if has_specific_out {
+        if opts.out_hex {
+            print(color.hex + "\n");
+        }
+        if opts.out_rgb {
+            print("rgb(" + to_string(color.rgb.r) + ", " + to_string(color.rgb.g) + ", " + to_string(color.rgb.b) + ")\n");
+        }
+        if opts.out_hsl {
+            print("hsl(" + to_string(color.hsl.h) + ", " + to_string(color.hsl.s) + "%, " + to_string(color.hsl.l) + "%)\n");
+        }
+        if opts.out_cmyk {
+            print("cmyk(" + to_string(color.cmyk.c) + "%, " + to_string(color.cmyk.m) + "%, " + to_string(color.cmyk.y) + "%, " + to_string(color.cmyk.k) + "%)\n");
+        }
+        if opts.out_ansi {
+            print(to_string(color.ansi256) + "\n");
+        }
+        if opts.preview {
+            print(render_swatch(color) + "  " + color.hex + "\n");
+        }
+        process_exit(0);
+        return Ok(0);
+    }
+
+    if opts.json {
+        print(render_json_telemetry(color));
+        process_exit(0);
+        return Ok(0);
+    }
+
+    print(render_color_card(color));
+    process_exit(0);
+    return Ok(0);
 }

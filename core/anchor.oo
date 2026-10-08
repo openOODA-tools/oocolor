@@ -1,0 +1,64 @@
+// # oocolor Core Verification Anchor
+//
+// Logline: Verification anchor certifying color space math, hex parsing, and WCAG contrast evaluations.
+//
+// Setup: Validates color models against deterministic chromatic invariants.
+//
+// Beats:
+//   1. Assert pure red #FF0000 conversion into RGB, HSL, and CMYK.
+//   2. Assert 3-digit shorthand hex expansion (#0F0 -> #00FF00).
+//   3. Assert black and white maximum contrast ratio (21.0:1).
+//   4. Assert tint and shade palette generation counts.
+
+import "core/color_types.oo";
+import "core/color_convert.oo";
+import "core/color_demo.oo";
+
+pub fn verify_core_subsystem() -> Bool {
+    // 1. Red hex parse & color spaces
+    let red_res: Result[ColorRecord, String] = parse_color_string("#FF0000");
+    if !red_res.is_ok() {
+        return false;
+    }
+    let red: ColorRecord = match red_res { Ok(c) => c, Err(_) => build_demo_red() };
+    if red.hex != "#FF0000" || red.rgb.r != 255 || red.rgb.g != 0 || red.rgb.b != 0 {
+        return false;
+    }
+    if red.hsl.h != 0 || red.hsl.s != 100 || red.hsl.l != 50 {
+        return false;
+    }
+    let red_cmyk: CmykColor = red.cmyk;
+    let c_val: Int = red_cmyk.c;
+    let m_val: Int = red_cmyk.m;
+    let y_val: Int = red_cmyk.y;
+    let k_val: Int = red_cmyk.k;
+    if c_val != 0 || m_val != 100 || y_val != 100 || k_val != 0 {
+        return false;
+    }
+
+    // 2. Shorthand hex parse
+    let green_res: Result[ColorRecord, String] = parse_color_string("#0F0");
+    if !green_res.is_ok() {
+        return false;
+    }
+    let green: ColorRecord = match green_res { Ok(c) => c, Err(_) => build_demo_green() };
+    if green.hex != "#00FF00" {
+        return false;
+    }
+
+    // 3. Contrast evaluation: black vs white
+    let black: ColorRecord = build_demo_black();
+    let white: ColorRecord = build_demo_white();
+    let contrast: ContrastResult = calculate_contrast(white, black);
+    if contrast.ratio_x100 != 2100 || !contrast.aaa_normal {
+        return false;
+    }
+
+    // 4. Palette generation
+    let tints: List[ColorRecord] = generate_tints(red, 5);
+    if list_len(tints) != 5 {
+        return false;
+    }
+
+    return true;
+}

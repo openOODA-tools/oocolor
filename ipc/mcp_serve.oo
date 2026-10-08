@@ -1,0 +1,175 @@
+// # Model Context Protocol (MCP) Server for oocolor
+//
+// Logline: JSON-RPC 2.0 stdio server providing sovereign color conversions, contrast audits, and palette generation.
+//
+// Setup: Services agent tool invocations over standard input without ambient network authority.
+//
+// Beats:
+//   1. Handle MCP initialize handshake with server metadata.
+//   2. Expose tools/list catalogue with five sovereign color tools.
+//   3. Dispatch tools/call for convert, contrast, palette, blend, and inspect.
+//   4. Deliver streaming JSON-RPC responses over standard output.
+
+import "core/color_types.oo";
+import "core/color_convert.oo";
+import "core/color_demo.oo";
+import "render/color_theme.oo";
+import "ipc/json_field.oo";
+
+fn build_error(id: String, code: Int, msg: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":" + to_string(code) + ",\"message\":\"" + json_escape(msg) + "\"}}\n";
+}
+
+fn build_tool_result(id: String, text: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"" + json_escape(text) + "\"}]}}\n";
+}
+
+pub fn render_mcp_init(id: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"oocolor\",\"version\":\"0.2.0\"}}}\n";
+}
+
+pub fn render_mcp_tools_list(id: String) -> String {
+    let mut out: String = "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"tools\":[";
+    out = out + "{\"name\":\"color_convert\",\"description\":\"Convert color to HEX, RGB, HSL, CMYK, and ANSI 256 representations.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"color\":{\"type\":\"string\"}},\"required\":[\"color\"]}},";
+    out = out + "{\"name\":\"color_contrast\",\"description\":\"Calculate WCAG 2.1 contrast ratio and AA/AAA compliance between two colors.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"color1\":{\"type\":\"string\"},\"color2\":{\"type\":\"string\"}},\"required\":[\"color1\",\"color2\"]}},";
+    out = out + "{\"name\":\"color_palette\",\"description\":\"Generate tints, shades, or harmonic palette sequences from a base color.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"color\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\"},\"steps\":{\"type\":\"integer\"}},\"required\":[\"color\"]}},";
+    out = out + "{\"name\":\"color_blend\",\"description\":\"Blend or interpolate between two colors by percentage weight.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"color1\":{\"type\":\"string\"},\"color2\":{\"type\":\"string\"},\"weight\":{\"type\":\"integer\"}},\"required\":[\"color1\",\"color2\"]}},";
+    out = out + "{\"name\":\"color_inspect\",\"description\":\"Inspect color metrics, luminance, and diagnostic color representations.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"color\":{\"type\":\"string\"}},\"required\":[\"color\"]}}";
+    out = out + "]}}\n";
+    return out;
+}
+
+pub fn handle_mcp_call(
+    id: String,
+    tool_name: String,
+    req: String
+) -> String {
+    let c_in: String = extract_json_str(req, "color");
+
+    if tool_name == "color_convert" {
+        let r: Result[ColorRecord, String] = parse_color_string(c_in);
+        if !r.is_ok() {
+            return build_error(id, -32602, match r { Ok(_) => "", Err(e) => e });
+        }
+        let col: ColorRecord = match r { Ok(c) => c, Err(_) => build_demo_red() };
+        return build_tool_result(id, render_json_telemetry(col));
+    }
+
+    if tool_name == "color_contrast" {
+        let c1_in: String = extract_json_str(req, "color1");
+        let c2_in: String = extract_json_str(req, "color2");
+        let r1: Result[ColorRecord, String] = parse_color_string(c1_in);
+        let r2: Result[ColorRecord, String] = parse_color_string(c2_in);
+        if !r1.is_ok() { return build_error(id, -32602, match r1 { Ok(_) => "", Err(e) => e }); }
+        if !r2.is_ok() { return build_error(id, -32602, match r2 { Ok(_) => "", Err(e) => e }); }
+        let c1: ColorRecord = match r1 { Ok(c) => c, Err(_) => build_demo_white() };
+        let c2: ColorRecord = match r2 { Ok(c) => c, Err(_) => build_demo_black() };
+        let res: ContrastResult = calculate_contrast(c1, c2);
+        return build_tool_result(id, render_contrast_json(res));
+    }
+
+    if tool_name == "color_palette" {
+        let r: Result[ColorRecord, String] = parse_color_string(c_in);
+        if !r.is_ok() { return build_error(id, -32602, match r { Ok(_) => "", Err(e) => e }); }
+        let base: ColorRecord = match r { Ok(c) => c, Err(_) => build_demo_red() };
+        let mode: String = extract_json_str(req, "mode");
+        let steps: Int = extract_json_int(req, "steps", 5);
+
+        let list: List[ColorRecord] = if mode == "shades" {
+            generate_shades(base, steps)
+        } else {
+            generate_tints(base, steps)
+        };
+
+        let mut out: String = "{\"palette\":[";
+        let n: Int = list_len(list);
+        let mut i: Int = 0;
+        while i < n {
+            let item: ColorRecord = list_get(list, i);
+            if i > 0 { out = out + ","; }
+            out = out + "{\"hex\":\"" + item.hex + "\",\"rgb\":\"rgb(" + to_string(item.rgb.r) + "," + to_string(item.rgb.g) + "," + to_string(item.rgb.b) + ")\"}";
+            i = i + 1;
+        }
+        out = out + "]}\n";
+        return build_tool_result(id, out);
+    }
+
+    if tool_name == "color_blend" {
+        let c1_in: String = extract_json_str(req, "color1");
+        let c2_in: String = extract_json_str(req, "color2");
+        let weight: Int = extract_json_int(req, "weight", 50);
+        let r1: Result[ColorRecord, String] = parse_color_string(c1_in);
+        let r2: Result[ColorRecord, String] = parse_color_string(c2_in);
+        if !r1.is_ok() { return build_error(id, -32602, match r1 { Ok(_) => "", Err(e) => e }); }
+        if !r2.is_ok() { return build_error(id, -32602, match r2 { Ok(_) => "", Err(e) => e }); }
+        let c1: ColorRecord = match r1 { Ok(c) => c, Err(_) => build_demo_white() };
+        let c2: ColorRecord = match r2 { Ok(c) => c, Err(_) => build_demo_black() };
+        let blended: ColorRecord = blend_colors(c1, c2, weight);
+        return build_tool_result(id, render_json_telemetry(blended));
+    }
+
+    if tool_name == "color_inspect" {
+        let r: Result[ColorRecord, String] = parse_color_string(c_in);
+        if !r.is_ok() { return build_error(id, -32602, match r { Ok(_) => "", Err(e) => e }); }
+        let col: ColorRecord = match r { Ok(c) => c, Err(_) => build_demo_red() };
+        let card: String = render_color_card(col) + "\n" + render_json_telemetry(col);
+        return build_tool_result(id, card);
+    }
+
+    return build_error(id, -32601, "Unknown tool: " + tool_name);
+}
+
+pub fn handle_mcp_message(req: String) -> String {
+    let id_str: String = extract_json_str(req, "id");
+    let id: String = if chars_len(id_str) > 0 { "\"" + id_str + "\"" } else { "1" };
+    let method: String = extract_json_str(req, "method");
+
+    if method == "initialize" {
+        return render_mcp_init(id);
+    }
+    if method == "notifications/initialized" {
+        return "";
+    }
+    if method == "tools/list" {
+        return render_mcp_tools_list(id);
+    }
+    if method == "tools/call" {
+        let tool_name: String = extract_json_str(req, "name");
+        return handle_mcp_call(id, tool_name, req);
+    }
+    if method == "shutdown" {
+        return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":null}\n";
+    }
+    return build_error(id, -32601, "Method not found: " + method);
+}
+
+pub fn run_mcp_server(fs: &FsReadCap) {
+    let mut buf: String = "";
+    let mut running: Bool = true;
+    while running {
+        let r: Result[String, String] = oo_read_stdin_chunk(fs, 4096);
+        if !r.is_ok() {
+            running = false;
+        } else {
+            let chunk: String = match r { Ok(s) => s, Err(_) => "" };
+            if chars_len(chunk) == 0 {
+                running = false;
+            } else {
+                buf = buf + chunk;
+                let mut nl_pos: Int = str_index_of(buf, "\n");
+                while nl_pos >= 0 {
+                    let line: String = str_slice(buf, 0, nl_pos);
+                    buf = str_slice(buf, nl_pos + 1, chars_len(buf));
+                    let trimmed: String = str_trim(line);
+                    if chars_len(trimmed) > 0 {
+                        let resp: String = handle_mcp_message(trimmed);
+                        if chars_len(resp) > 0 {
+                            print(resp);
+                        }
+                    }
+                    nl_pos = str_index_of(buf, "\n");
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,44 @@
+// # oocolor Render Subsystem Verification Anchor
+//
+// Logline: Verification anchor certifying swatch rendering, color card formatting, and JSON telemetry streams.
+//
+// Setup: Validates output generators against deterministic color and contrast fixtures.
+//
+// Beats:
+//   1. Assert terminal TrueColor swatch sequence generation.
+//   2. Assert color card output format.
+//   3. Assert contrast report table generation.
+//   4. Validate structured JSON telemetry schema.
+
+import "core/color_types.oo";
+import "core/color_convert.oo";
+import "core/color_demo.oo";
+import "render/color_theme.oo";
+
+pub fn verify_render_subsystem() -> Bool {
+    let red: ColorRecord = build_demo_red();
+    let swatch: String = render_swatch(red);
+    if !str_contains(swatch, "48;2;255;0;0m") {
+        return false;
+    }
+
+    let card: String = render_color_card(red);
+    if !str_contains(card, "#FF0000") || !str_contains(card, "rgb(255, 0, 0)") {
+        return false;
+    }
+
+    let white: ColorRecord = build_demo_white();
+    let black: ColorRecord = build_demo_black();
+    let contrast: ContrastResult = calculate_contrast(white, black);
+    let report: String = render_contrast_card(contrast);
+    if !str_contains(report, "21.00:1") || !str_contains(report, "PASS") {
+        return false;
+    }
+
+    let json_out: String = render_json_telemetry(red);
+    if !str_contains(json_out, "\"tool\":\"oocolor\"") || !str_contains(json_out, "\"hex\":\"#FF0000\"") {
+        return false;
+    }
+
+    return true;
+}

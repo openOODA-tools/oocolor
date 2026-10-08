@@ -1,0 +1,102 @@
+// # oocolor Color Conversion Data Types
+//
+// Logline: Data structures for RGB, HSL, CMYK, ANSI 256, and WCAG contrast evaluations.
+//
+// Setup: Strongly typed records representing multi-space color models and telemetry.
+//
+// Beats:
+//   1. Declare RgbColor, HslColor, and CmykColor component records.
+//   2. Declare ColorRecord encapsulating unified cross-space representation.
+//   3. Declare ContrastResult encapsulating WCAG 2.1 compliance metrics.
+//   4. Supply constructors for records and default color constants.
+
+pub type RgbColor = struct {
+    r: Int,
+    g: Int,
+    b: Int
+};
+
+pub fn make_rgb(r: Int, g: Int, b: Int) -> RgbColor {
+    return RgbColor { r: r, g: g, b: b };
+}
+
+pub type HslColor = struct {
+    h: Int,
+    s: Int,
+    l: Int
+};
+
+pub fn make_hsl(h: Int, s: Int, l: Int) -> HslColor {
+    return HslColor { h: h, s: s, l: l };
+}
+
+pub type CmykColor = struct {
+    c: Int,
+    m: Int,
+    y: Int,
+    k: Int
+};
+
+pub fn make_cmyk(c: Int, m: Int, y: Int, k: Int) -> CmykColor {
+    return CmykColor { c: c, m: m, y: y, k: k };
+}
+
+pub type ColorRecord = struct {
+    hex: String,
+    rgb: RgbColor,
+    hsl: HslColor,
+    cmyk: CmykColor,
+    ansi256: Int,
+    name: String
+};
+
+pub fn make_color_record(
+    hex: String,
+    rgb: RgbColor,
+    hsl: HslColor,
+    cmyk: CmykColor,
+    ansi256: Int,
+    name: String
+) -> ColorRecord {
+    return ColorRecord {
+        hex: hex,
+        rgb: rgb,
+        hsl: hsl,
+        cmyk: cmyk,
+        ansi256: ansi256,
+        name: name
+    };
+}
+
+pub type ContrastResult = struct {
+    fg_hex: String,
+    bg_hex: String,
+    ratio_x100: Int,
+    ratio_str: String,
+    aa_normal: Bool,
+    aa_large: Bool,
+    aaa_normal: Bool,
+    aaa_large: Bool
+};
+
+pub fn make_contrast_result(
+    fg_hex: String,
+    bg_hex: String,
+    ratio_x100: Int,
+    ratio_str: String,
+    aa_norm: Bool,
+    aa_lg: Bool,
+    aaa_norm: Bool,
+    aaa_lg: Bool
+) -> ContrastResult {
+    return ContrastResult {
+        fg_hex: fg_hex,
+        bg_hex: bg_hex,
+        ratio_x100: ratio_x100,
+        ratio_str: ratio_str,
+        aa_normal: aa_norm,
+        aa_large: aa_lg,
+        aaa_normal: aaa_norm,
+        aaa_large: aaa_lg
+    };
+}

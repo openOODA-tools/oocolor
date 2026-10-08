@@ -1,7 +1,7 @@
 # Maintainer: openOODA-tools <ops@openooda.org>
 pkgname=oocolor-bin
 _pkgname=oocolor
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Converts between HEX, RGB, HSL, CMYK, and ANSI 256 color representations."
 arch=('x86_64')
